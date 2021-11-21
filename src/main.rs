@@ -1,5 +1,7 @@
+#[allow(dead_code)]
+mod docker;
+
 use async_compression::tokio::bufread::GzipDecoder;
-use docker::Docker;
 use futures::{Stream, StreamExt};
 use rusoto_core::{HttpClient, Region, RusotoError};
 use rusoto_credential::StaticProvider;
@@ -7,6 +9,8 @@ use rusoto_s3::{GetObjectRequest, S3Client, S3};
 use serde::Deserialize;
 use std::{env, fs, future::Future, io, path::Path, pin::Pin, str, sync::Arc, time::Duration};
 use tokio::io::{AsyncReadExt, AsyncWrite, AsyncWriteExt};
+
+use docker::Docker;
 
 #[derive(Deserialize, Debug)]
 struct AwsConfig {

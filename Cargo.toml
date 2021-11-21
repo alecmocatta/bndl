@@ -1,6 +1,6 @@
 [package]
 name = "bndl"
-version = "0.1.0"
+version = "0.1.1"
 license = "MIT OR Apache-2.0"
 authors = ["Alec Mocatta <alec@mocatta.net>"]
 categories = ["development-tools"]
@@ -19,8 +19,6 @@ azure-devops = { project = "alecmocatta/bndl", pipeline = "tests", build = "30" 
 maintenance = { status = "actively-developed" }
 
 [dependencies]
-# docker = { version = "=0.1.0", path = "../frontend/docker" }
-
 async-compression = { version = "0.3", features = ["tokio", "gzip"] }
 count-write = { version = "0.1", features = ["tokio"], git = "https://github.com/alecmocatta/count-write" }
 derive-new = "0.5"
@@ -38,3 +36,15 @@ tokio = { version = "1", features = ["macros", "net", "fs", "process", "rt-multi
 tokio-stream = "0.1"
 tokio-tar = { version = "0.3", git = "https://github.com/vorot93/tokio-tar" }
 walkdir = "2"
+
+# vendored docker deps
+
+# async-pipe = { version = "0.1", features = ["tokio"], git = "https://github.com/routerify/async-pipe-rs" }
+bytes = "1"
+tokio-util = { version = "0.6", features = ["io", "io-util"] }
+
+[target.'cfg(unix)'.dependencies]
+shiplift = { version = "0.7", default-features = false, features = ["unix-socket"], git = "https://github.com/alecmocatta/shiplift" }
+
+[target.'cfg(windows)'.dependencies]
+shiplift = { version = "0.7", default-features = false, git = "https://github.com/alecmocatta/shiplift" }

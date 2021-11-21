@@ -1,3 +1,6 @@
+#[allow(dead_code)]
+mod docker;
+
 use async_compression::{tokio::write::GzipEncoder, Level};
 use count_write::CountWrite;
 use futures::StreamExt;
