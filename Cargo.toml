@@ -24,7 +24,7 @@ count-write = { version = "0.1", features = ["tokio"], git = "https://github.com
 derive-new = "0.5"
 envy = "0.4"
 futures = "0.3"
-# indicatif = { version = "0.17.0-beta.1", features = ["tokio"], git = "https://github.com/mitsuhiko/indicatif" }
+indicatif = { version = "0.17.0-beta.1", features = ["tokio"], git = "https://github.com/mitsuhiko/indicatif" }
 pin-project = "1"
 rusoto_core = "0.47"
 rusoto_credential = "0.47"
@@ -39,7 +39,7 @@ walkdir = "2"
 
 # vendored docker deps
 
-# async-pipe = { version = "0.1", features = ["tokio"], git = "https://github.com/routerify/async-pipe-rs" }
+async-pipe = { version = "0.1", features = ["tokio"], git = "https://github.com/routerify/async-pipe-rs" }
 bytes = "1"
 tokio-util = { version = "0.6", features = ["io", "io-util"] }
 
