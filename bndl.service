@@ -1,0 +1,19 @@
+# sudo ln -s /home/ubuntu/tably/tably.service /etc/systemd/system/tably.service
+# sudo systemctl enable tably # to enable on boot
+# sudo systemctl start tably # to start now
+
+[Unit]
+Description=bndl supervisor
+
+[Service]
+User=root
+Group=root
+WorkingDirectory=/home/ubuntu
+Restart=always
+ExecStart=bndl
+Environment="AWS_ACCESS_KEY_ID=" "AWS_SECRET_ACCESS_KEY=" AWS_REGION=us-east-1 BNDL_BUCKET= BNDL_BRANCH=main
+StandardOutput=append:/home/ubuntu/bndl.log
+StandardError=inherit
+
+[Install]
+WantedBy=multi-user.target

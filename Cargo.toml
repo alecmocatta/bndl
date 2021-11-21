@@ -1,0 +1,40 @@
+[package]
+name = "bndl"
+version = "0.1.0"
+license = "MIT OR Apache-2.0"
+authors = ["Alec Mocatta <alec@mocatta.net>"]
+categories = ["development-tools"]
+keywords = ["bundle", "package", "distribute"]
+description = """
+Bundle build artifacts into a redistributable archive.
+"""
+repository = "https://github.com/alecmocatta/bndl"
+homepage = "https://github.com/alecmocatta/bndl"
+documentation = "https://docs.rs/bndl"
+readme = "README.md"
+edition = "2021"
+
+[badges]
+azure-devops = { project = "alecmocatta/bndl", pipeline = "tests", build = "30" }
+maintenance = { status = "actively-developed" }
+
+[dependencies]
+# docker = { version = "=0.1.0", path = "../frontend/docker" }
+
+async-compression = { version = "0.3", features = ["tokio", "gzip"] }
+count-write = { version = "0.1", features = ["tokio"], git = "https://github.com/alecmocatta/count-write" }
+derive-new = "0.5"
+envy = "0.4"
+futures = "0.3"
+# indicatif = { version = "0.17.0-beta.1", features = ["tokio"], git = "https://github.com/mitsuhiko/indicatif" }
+pin-project = "1"
+rusoto_core = "0.47"
+rusoto_credential = "0.47"
+rusoto_s3 = "0.47"
+serde = "1"
+serde_with = "1"
+shlex = "1"
+tokio = { version = "1", features = ["macros", "net", "fs", "process", "rt-multi-thread", "io-util"] }
+tokio-stream = "0.1"
+tokio-tar = { version = "0.3", git = "https://github.com/vorot93/tokio-tar" }
+walkdir = "2"
