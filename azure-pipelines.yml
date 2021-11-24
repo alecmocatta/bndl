@@ -27,7 +27,7 @@ jobs:
         rust_target_run: 'x86_64-pc-windows-msvc i686-pc-windows-msvc x86_64-pc-windows-gnu'
       mac:
         imageName: 'macos-latest'
-        rust_target_build: 'aarch64-apple-darwin'
+        rust_target_build: '' # aarch64-apple-darwin
         rust_target_run: 'x86_64-apple-darwin'
       linux:
         imageName: 'ubuntu-latest'
