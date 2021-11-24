@@ -160,7 +160,7 @@ async fn s3_download(s3_client: &S3Client, bucket: String, key: String) -> Resul
 	);
 
 	if let Some(parts) = parts {
-		let parallelism = 50;
+		let parallelism = 20;
 
 		let body = tokio_util::io::StreamReader::new(
 			futures::stream::iter((0..parts).map(move |i| {
