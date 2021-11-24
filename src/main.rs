@@ -7,8 +7,8 @@ use rusoto_core::{HttpClient, Region, RusotoError};
 use rusoto_credential::StaticProvider;
 use rusoto_s3::{GetObjectRequest, S3Client, S3};
 use serde::Deserialize;
-use std::{env, fs, future::Future, io, path::Path, pin::Pin, str, sync::Arc, time::Duration};
-use tokio::io::{AsyncReadExt, AsyncWrite, AsyncWriteExt};
+use std::{env, fs, future::Future, io, io::Cursor, path::Path, pin::Pin, str, sync::Arc, time::Duration};
+use tokio::io::{AsyncBufRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 
 use docker::Docker;
 
@@ -53,71 +53,58 @@ async fn main() {
 		})
 		.dedup()
 		.then_cancel(|tree_hash| async {
+			println!("downloading {}", tree_hash);
+			let entry = Path::new(&tree_hash).join("__entry");
+			if let Ok(entrypoint) = fs::read_to_string(&entry) {
+				let args = shlex::split(&entrypoint).unwrap();
+				return (tree_hash, args);
+			}
 			fs::remove_dir_all(&tree_hash).or_else(|e| (e.kind() == io::ErrorKind::NotFound).then(|| ()).ok_or(e)).unwrap();
 
-			// download /build/tree_hash.tar from s3
-			let tar = rusoto_retry(|| async {
-				s3_client
-					.get_object(GetObjectRequest {
-						bucket: config.bucket.clone(),
-						key: format!("{}/backend.tar.gz", tree_hash),
-						..Default::default()
-					})
-					.await
-			})
-			.await
-			.unwrap();
+			// scope to ensure pb is dropped before potential panics https://github.com/mitsuhiko/indicatif/issues/121
+			let (docker_result, entrypoint) = {
+				let tar = s3_download(s3_client, config.bucket.clone(), format!("{}/backend.tar.gz", tree_hash)).await.unwrap();
+				let tar = GzipDecoder::new(tar);
 
-			let tar_len = tar.content_length.unwrap();
-			let tar = tar.body.unwrap().into_async_read();
+				let mut entries = tokio_tar::Archive::new(tar).entries().unwrap();
+				let docker = Docker::new();
+				let (writer, results) = docker.images_import();
+				tokio::pin!(writer);
+				// work around stupid tokio_tar 'static bound
+				let writer: Pin<&mut (dyn AsyncWrite + Send + '_)> = writer;
+				let writer: Pin<&'static mut (dyn AsyncWrite + Send + 'static)> = unsafe { std::mem::transmute(writer) };
+				let mut docker_tar = tokio_tar::Builder::new(writer);
 
-			let pb = indicatif::ProgressBar::new(tar_len.try_into().unwrap());
-			pb.set_style(
-				indicatif::ProgressStyle::default_bar()
-					.template("{spinner:.green} [{elapsed_precise}] [{wide_bar:.cyan/blue}] {bytes}/{total_bytes} ({bytes_per_sec}, {eta})")
-					.progress_chars("#>-")
-					.on_finish(indicatif::ProgressFinish::AndLeave),
-			);
-			let tar = pb.wrap_async_read(tar);
+				let mut entrypoint = None;
 
-			let tar = GzipDecoder::new(tokio::io::BufReader::new(tar));
-
-			let mut entries = tokio_tar::Archive::new(tar).entries().unwrap();
-			let docker = Docker::new();
-			let (writer, results) = docker.images_import();
-			tokio::pin!(writer);
-			// work around stupid tokio_tar 'static bound
-			let writer: Pin<&mut (dyn AsyncWrite + Send + '_)> = writer;
-			let writer: Pin<&'static mut (dyn AsyncWrite + Send + 'static)> = unsafe { std::mem::transmute(writer) };
-
-			let mut entrypoint = None;
-
-			let ((), docker_result) = futures::join!(
-				async {
-					let mut docker_tar = tokio_tar::Builder::new(writer);
-					while let Some(entry) = entries.next().await {
-						let mut entry = entry.unwrap();
-						let path = entry.path().unwrap().into_owned();
-						if path == Path::new("__entry") {
-							entrypoint = Some(String::new());
-							entry.read_to_string(entrypoint.as_mut().unwrap()).await.unwrap();
-						} else if let Ok(path) = path.strip_prefix("__docker") {
-							if !path.to_str().unwrap().is_empty() {
-								let mut header = entry.header().clone();
-								docker_tar.append_data(&mut header, path, entry).await.unwrap();
+				let ((), docker_result) = futures::join!(
+					async {
+						while let Some(entry) = entries.next().await {
+							let mut entry = entry.unwrap();
+							let path = entry.path().unwrap().into_owned();
+							if path == Path::new("__entry") {
+								entrypoint = Some(String::new());
+								entry.read_to_string(entrypoint.as_mut().unwrap()).await.unwrap();
+							} else if let Ok(path) = path.strip_prefix("__docker") {
+								if !path.to_str().unwrap().is_empty() {
+									let mut header = entry.header().clone();
+									docker_tar.append_data(&mut header, path, entry).await.unwrap();
+								}
+							} else {
+								let _ = entry.unpack_in(&tree_hash).await.unwrap();
 							}
-						} else {
-							let _ = entry.unpack_in(&tree_hash).await.unwrap();
 						}
-					}
-					let mut docker_tar = docker_tar.into_inner().await.unwrap();
-					docker_tar.shutdown().await.unwrap();
-				},
-				results
-			);
-			drop(pb);
+						let mut docker_tar = docker_tar.into_inner().await.unwrap();
+						docker_tar.shutdown().await.unwrap();
+					},
+					results
+				);
+				(docker_result, entrypoint)
+			};
 			docker_result.unwrap();
-			let args = shlex::split(&entrypoint.unwrap()).unwrap();
+			let args = shlex::split(entrypoint.as_ref().unwrap()).unwrap();
+			assert!(!args.is_empty());
+			let _ = fs::write(entry, entrypoint.unwrap()).unwrap();
 			(tree_hash, args)
 		})
 		.for_each_cancel(|(tree_hash, args)| async move {
@@ -134,6 +121,89 @@ async fn main() {
 			}
 		})
 		.await;
+}
+
+async fn s3_download(s3_client: &S3Client, bucket: String, key: String) -> Result<impl AsyncBufRead + '_, io::Error> {
+	let head = rusoto_retry(|| async {
+		s3_client
+			.head_object(rusoto_s3::HeadObjectRequest { bucket: bucket.clone(), key: key.clone(), part_number: Some(1), ..Default::default() })
+			.await
+	})
+	.await
+	.unwrap();
+	let (part_size, parts): (u64, Option<u64>) = (head.content_length.unwrap().try_into().unwrap(), head.parts_count.map(|x| x.try_into().unwrap()));
+
+	let length: u64 = if head.parts_count.is_some() {
+		rusoto_retry(|| async {
+			s3_client
+				.head_object(rusoto_s3::HeadObjectRequest { bucket: bucket.clone(), key: key.clone(), part_number: None, ..Default::default() })
+				.await
+		})
+		.await
+		.unwrap()
+		.content_length
+		.unwrap()
+		.try_into()
+		.unwrap()
+	} else {
+		part_size
+	};
+
+	assert!(part_size * (parts.unwrap_or(1) - 1) < length && length <= part_size * parts.unwrap_or(1));
+
+	let pb = indicatif::ProgressBar::new(length);
+	pb.set_style(
+		indicatif::ProgressStyle::default_bar()
+			.template("{spinner:.green} [{elapsed_precise}] [{wide_bar:.cyan/blue}] {bytes}/{total_bytes} ({bytes_per_sec}, {eta})")
+			.progress_chars("#>-")
+			.on_finish(indicatif::ProgressFinish::AndLeave),
+	);
+
+	if let Some(parts) = parts {
+		let parallelism = 20;
+
+		let body = tokio_util::io::StreamReader::new(
+			futures::stream::iter((0..parts).map(move |i| {
+				let (pb, bucket, key) = (pb.clone(), bucket.clone(), key.clone());
+				async move {
+					let range = part_size * i..(part_size * (i + 1)).min(length);
+					let mut buf = vec![0; (range.end - range.start).try_into().unwrap()];
+					let body = rusoto_retry(|| async {
+						s3_client
+							.get_object(rusoto_s3::GetObjectRequest {
+								bucket: bucket.clone(),
+								key: key.clone(),
+								part_number: Some((i + 1).try_into().unwrap()),
+								..Default::default()
+							})
+							.await
+					})
+					.await
+					.unwrap()
+					.body
+					.unwrap()
+					.into_async_read();
+					let mut body = pb.wrap_async_read(body);
+					let _ = body.read_exact(&mut buf).await?;
+					Ok::<_, io::Error>(Cursor::new(buf))
+				}
+			}))
+			.buffered(parallelism),
+		);
+		Ok(tokio_util::either::Either::Left(body))
+	} else {
+		let body = rusoto_retry(|| async {
+			s3_client.get_object(GetObjectRequest { bucket: bucket.clone(), key: key.clone(), ..Default::default() }).await
+		})
+		.await
+		.unwrap()
+		.body
+		.unwrap()
+		.into_async_read();
+		let body = pb.wrap_async_read(body);
+		let body = tokio::io::BufReader::new(body);
+		Ok(tokio_util::either::Either::Right(body))
+	}
 }
 
 async fn rusoto_retry<F, U, T, E>(mut f: F) -> Result<T, RusotoError<E>>
