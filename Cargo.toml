@@ -19,7 +19,7 @@ azure-devops = { project = "alecmocatta/bndl", pipeline = "tests", build = "30" 
 maintenance = { status = "actively-developed" }
 
 [dependencies]
-async-compression = { version = "0.3", features = ["tokio", "gzip"] }
+async-compression = { version = "0.3", features = ["tokio", "zstd"] }
 count-write = { version = "0.1", features = ["tokio"], git = "https://github.com/alecmocatta/count-write" }
 derive-new = "0.5"
 envy = "0.4"

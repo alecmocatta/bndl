@@ -1,7 +1,7 @@
 #[allow(dead_code)]
 mod docker;
 
-use async_compression::tokio::bufread::GzipDecoder;
+use async_compression::tokio::bufread::ZstdDecoder;
 use futures::{Stream, StreamExt};
 use rusoto_core::{HttpClient, Region, RusotoError};
 use rusoto_credential::StaticProvider;
@@ -63,8 +63,8 @@ async fn main() {
 
 			// scope to ensure pb is dropped before potential panics https://github.com/mitsuhiko/indicatif/issues/121
 			let (docker_result, entrypoint) = {
-				let tar = s3_download(s3_client, config.bucket.clone(), format!("{}/backend.tar.gz", tree_hash)).await.unwrap();
-				let tar = GzipDecoder::new(tar);
+				let tar = s3_download(s3_client, config.bucket.clone(), format!("{}/backend.tar.zst", tree_hash)).await.unwrap();
+				let tar = ZstdDecoder::new(tar);
 
 				let mut entries = tokio_tar::Archive::new(tar).entries().unwrap();
 				let docker = Docker::new();
