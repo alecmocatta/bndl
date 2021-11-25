@@ -65,6 +65,7 @@ async fn main() {
 			let (docker_result, entrypoint) = {
 				let tar = s3_download(s3_client, config.bucket.clone(), format!("{}/backend.tar.zst", tree_hash)).await.unwrap();
 				let tar = ZstdDecoder::new(tar);
+				let tar = tokio::io::BufReader::new(tar);
 
 				let mut entries = tokio_tar::Archive::new(tar).entries().unwrap();
 				let docker = Docker::new();
