@@ -39,7 +39,7 @@ walkdir = "2"
 
 # vendored docker deps
 
-async-pipe = { version = "0.1", features = ["tokio"], git = "https://github.com/routerify/async-pipe-rs" }
+async-pipe = { version = "0.1", features = ["tokio"], git = "https://github.com/alecmocatta/async-pipe-rs" }
 bytes = "1"
 tokio-util = { version = "0.6", features = ["io", "io-util"] }
 

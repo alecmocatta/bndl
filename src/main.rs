@@ -2,12 +2,13 @@
 mod docker;
 
 use async_compression::tokio::bufread::ZstdDecoder;
+use bytes::BytesMut;
 use futures::{Stream, StreamExt};
 use rusoto_core::{HttpClient, Region, RusotoError};
 use rusoto_credential::StaticProvider;
 use rusoto_s3::{GetObjectRequest, S3Client, S3};
 use serde::Deserialize;
-use std::{env, fs, future::Future, io, io::Cursor, path::Path, pin::Pin, str, sync::Arc, time::Duration};
+use std::{env, fs, future::Future, io, path::Path, pin::Pin, str, sync::Arc, time::Duration};
 use tokio::io::{AsyncBufRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 
 use docker::Docker;
@@ -168,7 +169,6 @@ async fn s3_download(s3_client: &S3Client, bucket: String, key: String) -> Resul
 				let (pb, bucket, key) = (pb.clone(), bucket.clone(), key.clone());
 				async move {
 					let range = part_size * i..(part_size * (i + 1)).min(length);
-					let mut buf = vec![0; (range.end - range.start).try_into().unwrap()];
 					let body = rusoto_retry(|| async {
 						s3_client
 							.get_object(rusoto_s3::GetObjectRequest {
@@ -185,8 +185,13 @@ async fn s3_download(s3_client: &S3Client, bucket: String, key: String) -> Resul
 					.unwrap()
 					.into_async_read();
 					let mut body = pb.wrap_async_read(body);
-					let _ = body.read_exact(&mut buf).await?;
-					Ok::<_, io::Error>(Cursor::new(buf))
+					let cap: usize = (range.end - range.start).try_into().unwrap();
+					let mut buf = BytesMut::with_capacity(cap);
+					while buf.len() != cap {
+						let _ = body.read_buf(&mut buf).await?;
+						assert!(buf.len() <= cap);
+					}
+					Ok::<_, io::Error>(buf)
 				}
 			}))
 			.buffered(parallelism),

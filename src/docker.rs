@@ -48,7 +48,7 @@ impl Docker {
 			writer,
 			self.docker
 				.images()
-				.import(tokio_util::io::ReaderStream::new(reader).map(|x| x.map(|bytes| bytes.as_ref().to_owned())))
+				.import(tokio_util::io::ReaderStream::with_capacity(reader, 16 * 1024 * 1024).map(|x| x.map(|bytes| bytes.as_ref().to_owned())))
 				.map(|chunk| {
 					chunk.and_then(|chunk| {
 						match chunk {
