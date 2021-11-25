@@ -1,7 +1,7 @@
 #[allow(dead_code)]
 mod docker;
 
-use async_compression::{tokio::write::GzipEncoder, Level};
+use async_compression::{tokio::write::ZstdEncoder, Level};
 use count_write::CountWrite;
 use futures::StreamExt;
 use std::{
@@ -40,8 +40,9 @@ pub async fn bundle(binary: PathBuf, resource_dirs: HashSet<PathBuf>, tar: impl 
 	let tar_: Pin<&mut (dyn AsyncWrite + Unpin + Send + '_)> = Pin::new(&mut tar);
 	let tar_: Pin<&'static mut (dyn AsyncWrite + Unpin + Send + 'static)> = unsafe { std::mem::transmute(tar_) };
 
-	// create a deterministic .tar.gz
-	let tar_ = GzipEncoder::with_quality(tar_, Level::Precise(6)); // 6 = good default
+	// create a deterministic .tar.zsd
+	// https://community.centminmod.com/threads/round-4-compression-comparison-benchmarks-zstd-vs-brotli-vs-pigz-vs-bzip2-vs-xz-etc.18669/
+	let tar_ = ZstdEncoder::with_quality(tar_, Level::Precise(6));
 	let mut tar_ = tokio_tar::Builder::new(tar_);
 	tar_.mode(tokio_tar::HeaderMode::Deterministic);
 
