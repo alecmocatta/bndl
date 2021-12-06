@@ -77,7 +77,6 @@ dependencies = [
  "async-compression",
  "async-pipe",
  "bytes 1.1.0",
- "count-write",
  "derive-new",
  "envy",
  "futures",
@@ -178,14 +177,6 @@ name = "core-foundation-sys"
 version = "0.8.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5827cebf4670468b8772dd191856768aedcb1b0278a04f989f7766351917b9dc"
-
-[[package]]
-name = "count-write"
-version = "0.1.0"
-source = "git+https://github.com/alecmocatta/count-write#0eec56b813b5207692ced3f64c79eeee3c22108b"
-dependencies = [
- "tokio",
-]
 
 [[package]]
 name = "cpufeatures"

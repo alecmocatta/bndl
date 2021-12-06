@@ -66,7 +66,7 @@ async fn main() {
 			let (docker_result, entrypoint) = {
 				let tar = s3_download(s3_client, config.bucket.clone(), format!("{}/backend.tar.zst", tree_hash)).await.unwrap();
 				let tar = ZstdDecoder::new(tar);
-				let tar = tokio::io::BufReader::new(tar);
+				let tar = tokio::io::BufReader::with_capacity(16 * 1024 * 1024, tar);
 
 				let mut entries = tokio_tar::Archive::new(tar).entries().unwrap();
 				let docker = Docker::new();
@@ -207,7 +207,7 @@ async fn s3_download(s3_client: &S3Client, bucket: String, key: String) -> Resul
 		.unwrap()
 		.into_async_read();
 		let body = pb.wrap_async_read(body);
-		let body = tokio::io::BufReader::new(body);
+		let body = tokio::io::BufReader::with_capacity(16 * 1024 * 1024, body);
 		Ok(tokio_util::either::Either::Right(body))
 	}
 }

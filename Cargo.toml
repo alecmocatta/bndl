@@ -20,7 +20,6 @@ maintenance = { status = "actively-developed" }
 
 [dependencies]
 async-compression = { version = "0.3", features = ["tokio", "zstd"] }
-count-write = { version = "0.1", features = ["tokio"], git = "https://github.com/alecmocatta/count-write" }
 derive-new = "0.5"
 envy = "0.4"
 futures = "0.3"
