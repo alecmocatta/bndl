@@ -23,7 +23,7 @@ async-compression = { version = "0.3", features = ["tokio", "zstd"] }
 derive-new = "0.5"
 envy = "0.4"
 futures = "0.3"
-indicatif = { version = "0.17.0-beta.1", features = ["tokio"], git = "https://github.com/mitsuhiko/indicatif" }
+indicatif = { version = "0.17.0-beta.4", features = ["tokio"] }
 pin-project = "1"
 rusoto_core = { version = "0.47", default-features = false, features = ["rustls"] }
 rusoto_credential = "0.47"
@@ -33,17 +33,20 @@ serde_with = "1"
 shlex = "1"
 tokio = { version = "1", features = ["macros", "net", "fs", "process", "rt-multi-thread", "io-util"] }
 tokio-stream = "0.1"
-tokio-tar = { version = "0.3", git = "https://github.com/vorot93/tokio-tar" }
+tokio-tar = "0.3"
 walkdir = "2"
 
 # vendored docker deps
 
-async-pipe = { version = "0.1", features = ["tokio"], git = "https://github.com/alecmocatta/async-pipe-rs" }
 bytes = "1"
-tokio-util = { version = "0.6", features = ["io", "io-util"] }
+tokio-util = { version = "0.7", features = ["io", "io-util"] }
 
 [target.'cfg(unix)'.dependencies]
-shiplift = { version = "0.7", default-features = false, features = ["unix-socket"], git = "https://github.com/alecmocatta/shiplift" }
+shiplift = { version = "0.7", default-features = false, features = ["unix-socket"] }
 
 [target.'cfg(windows)'.dependencies]
-shiplift = { version = "0.7", default-features = false, git = "https://github.com/alecmocatta/shiplift" }
+shiplift = { version = "0.7", default-features = false }
+
+[patch.crates-io]
+tokio-tar = { version = "0.3", git = "https://github.com/Ben-PH/tokio-tar", branch = "yield_point_fix" }
+shiplift = { version = "0.7", git = "https://github.com/alecmocatta/shiplift" }
