@@ -2,7 +2,6 @@
 mod docker;
 
 use async_compression::{tokio::write::ZstdEncoder, Level};
-use async_pipe::PipeWriter;
 use futures::{future::Fuse, FutureExt, StreamExt};
 use pin_project::pin_project;
 use std::{
@@ -36,7 +35,7 @@ pub fn bundle(binary: PathBuf, resource_dirs: HashSet<PathBuf>) -> impl AsyncBuf
 		})
 		.collect::<Vec<_>>();
 
-	let (writer, reader) = async_pipe::pipe();
+	let (writer, reader) = tokio::io::duplex(16 * 1024 * 1024);
 
 	let task = async move {
 		// create a deterministic .tar.zsd
@@ -107,7 +106,7 @@ pub fn bundle(binary: PathBuf, resource_dirs: HashSet<PathBuf>) -> impl AsyncBuf
 		// flush writers
 		let mut tar_ = tar_.into_inner().await.unwrap();
 		tar_.shutdown().await.unwrap();
-		let _writer: PipeWriter = tar_.into_inner();
+		let _writer: tokio::io::DuplexStream = tar_.into_inner();
 	};
 	let reader = tokio::io::BufReader::with_capacity(16 * 1024 * 1024, reader);
 	let task = task.fuse();

@@ -43,7 +43,7 @@ impl Docker {
 
 	/// Import the images from a tar (optionally gzip, bzip2 or xz)
 	pub fn images_import(&self) -> (impl AsyncWrite + '_, impl Future<Output = Result<(), shiplift::Error>> + Unpin + '_) {
-		let (writer, reader) = async_pipe::pipe();
+		let (writer, reader) = tokio::io::duplex(16 * 1024 * 1024);
 		(
 			writer,
 			self.docker
