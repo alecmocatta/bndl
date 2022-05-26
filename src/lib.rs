@@ -5,7 +5,14 @@ use async_compression::{tokio::write::ZstdEncoder, Level};
 use futures::{future::Fuse, FutureExt, StreamExt};
 use pin_project::pin_project;
 use std::{
-	collections::{BTreeSet, HashSet}, convert::TryInto, fs, future::Future, io, path::{Path, PathBuf}, pin::Pin, task::{Context, Poll}
+	collections::{BTreeSet, HashSet},
+	convert::TryInto,
+	fs,
+	future::Future,
+	io,
+	path::{Path, PathBuf},
+	pin::Pin,
+	task::{Context, Poll},
 };
 use tokio::io::{AsyncBufRead, AsyncRead, AsyncWriteExt, ReadBuf};
 use walkdir::WalkDir;
@@ -87,19 +94,22 @@ pub fn bundle(binary: PathBuf, resource_dirs: HashSet<PathBuf>) -> impl AsyncBuf
 
 		// add docker images resources to tar
 		if !docker_images.is_empty() {
-			let mut docker_images = docker_images.into_iter().collect::<Vec<_>>();
-			docker_images.sort();
 			let docker_dir = Path::new("__docker");
 			let docker = Docker::new();
 			builder_append_dir(&mut tar_, &docker_dir).await.unwrap();
-			let docker_tar = docker.images_export(docker_images);
-			tokio::pin!(docker_tar);
-			let mut entries = tokio_tar::Archive::new(docker_tar).entries().unwrap();
-			while let Some(entry) = entries.next().await {
-				let entry = entry.unwrap();
-				let mut header = entry.header().clone();
-				let path = docker_dir.join(header.path().unwrap());
-				tar_.append_data(&mut header, path, entry).await.unwrap();
+			// docker daemon seems to prepare the whole export locally before sending anything over the wire.
+			// This can be problematic of we have lots of images to export.
+			// We could potentially do it in batches, but this should do for now.
+			for image in docker_images {
+				let docker_tar = docker.images_export(vec![image]);
+				tokio::pin!(docker_tar);
+				let mut entries = tokio_tar::Archive::new(docker_tar).entries().unwrap();
+				while let Some(entry) = entries.next().await {
+					let entry = entry.unwrap();
+					let mut header = entry.header().clone();
+					let path = docker_dir.join(header.path().unwrap());
+					tar_.append_data(&mut header, path, entry).await.unwrap();
+				}
 			}
 		}
 
