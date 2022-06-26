@@ -56,6 +56,7 @@ async fn main() {
 				return (tree_hash, args);
 			}
 			fs::remove_dir_all(&tree_hash).or_else(|e| (e.kind() == io::ErrorKind::NotFound).then(|| ()).ok_or(e)).unwrap();
+			fs::create_dir(&tree_hash).unwrap();
 
 			// scope to ensure pb is dropped before potential panics https://github.com/mitsuhiko/indicatif/issues/121
 			let (docker_result, entrypoint) = {
