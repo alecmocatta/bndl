@@ -1,16 +1,13 @@
-#[allow(dead_code)]
+mod aws;
 mod docker;
 
 use async_compression::tokio::bufread::ZstdDecoder;
-use bytes::BytesMut;
 use futures::{Stream, StreamExt};
-use rusoto_core::{HttpClient, Region, RusotoError};
-use rusoto_credential::StaticProvider;
-use rusoto_s3::{GetObjectRequest, S3Client, S3};
 use serde::Deserialize;
-use std::{env, fs, future::Future, io, path::Path, pin::Pin, str, sync::Arc, time::Duration};
-use tokio::io::{AsyncBufRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
+use std::{env, fs, future::Future, io, path::Path, str, time::Duration};
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
+use aws::Region;
 use docker::Docker;
 
 #[derive(Deserialize, Debug)]
@@ -29,28 +26,26 @@ struct Config {
 
 #[tokio::main]
 async fn main() {
-	env::set_var("RUST_BACKTRACE", "1");
+	if env::var("RUST_BACKTRACE").is_err() {
+		env::set_var("RUST_BACKTRACE", "1");
+	}
 
 	let aws_config: AwsConfig = envy::prefixed("AWS_").from_env().unwrap();
 	let config: Config = envy::prefixed("BNDL_").from_env().unwrap();
 
-	let http_client = Arc::new(HttpClient::new().expect("failed to create request dispatcher"));
-	let creds = StaticProvider::new(aws_config.access_key_id.clone(), aws_config.secret_access_key.clone(), None, None);
-	let s3_client = &S3Client::new_with(http_client.clone(), creds.clone(), aws_config.region.clone());
+	let s3_client = &aws::s3_new(&aws_config.access_key_id, &aws_config.secret_access_key, aws_config.region);
 
 	interval(Duration::from_secs(10))
 		.then(|_| async {
 			// check /branches/main on s3
-			let tree_hash_req = rusoto_retry(|| async {
-				s3_client
-					.get_object(GetObjectRequest { bucket: config.bucket.clone(), key: format!("branches/{}", config.branch), ..Default::default() })
-					.await
-			})
-			.await
-			.expect("couldn't get branches/main");
-			let mut tree_hash = String::new();
-			tree_hash_req.body.unwrap().into_async_read().read_to_string(&mut tree_hash).await.unwrap();
-			tree_hash
+			let mut ret = String::new();
+			aws::download(s3_client, config.bucket.clone(), format!("branches/{}", config.branch))
+				.await
+				.expect("couldn't get branches/main")
+				.read_to_string(&mut ret)
+				.await
+				.unwrap();
+			ret
 		})
 		.dedup()
 		.then_cancel(|tree_hash| async {
@@ -64,17 +59,14 @@ async fn main() {
 
 			// scope to ensure pb is dropped before potential panics https://github.com/mitsuhiko/indicatif/issues/121
 			let (docker_result, entrypoint) = {
-				let tar = s3_download(s3_client, config.bucket.clone(), format!("{}/backend.tar.zst", tree_hash)).await.unwrap();
+				let tar = aws::download(s3_client, config.bucket.clone(), format!("{}/backend.tar.zst", tree_hash)).await.unwrap();
 				let tar = ZstdDecoder::new(tar);
 				let tar = tokio::io::BufReader::with_capacity(16 * 1024 * 1024, tar);
 
-				let mut entries = tokio_tar::Archive::new(tar).entries().unwrap();
+				let mut entries = tokio_tar::Archive::new(tar);
+				let mut entries = entries.entries().unwrap();
 				let docker = Docker::new();
 				let (writer, results) = docker.images_import();
-				tokio::pin!(writer);
-				// work around stupid tokio_tar 'static bound
-				let writer: Pin<&mut (dyn AsyncWrite + Send + '_)> = writer;
-				let writer: Pin<&'static mut (dyn AsyncWrite + Send + 'static)> = unsafe { std::mem::transmute(writer) };
 				let mut docker_tar = tokio_tar::Builder::new(writer);
 
 				let mut entrypoint = None;
@@ -106,7 +98,7 @@ async fn main() {
 			docker_result.unwrap();
 			let args = shlex::split(entrypoint.as_ref().unwrap()).unwrap();
 			assert!(!args.is_empty());
-			let _ = fs::write(entry, entrypoint.unwrap()).unwrap();
+			fs::write(entry, entrypoint.unwrap()).unwrap();
 			(tree_hash, args)
 		})
 		.for_each_cancel(|(tree_hash, args)| async move {
@@ -123,110 +115,6 @@ async fn main() {
 			}
 		})
 		.await;
-}
-
-async fn s3_download(s3_client: &S3Client, bucket: String, key: String) -> Result<impl AsyncBufRead + '_, io::Error> {
-	let head = rusoto_retry(|| async {
-		s3_client
-			.head_object(rusoto_s3::HeadObjectRequest { bucket: bucket.clone(), key: key.clone(), part_number: Some(1), ..Default::default() })
-			.await
-	})
-	.await
-	.unwrap();
-	let (part_size, parts): (u64, Option<u64>) = (head.content_length.unwrap().try_into().unwrap(), head.parts_count.map(|x| x.try_into().unwrap()));
-
-	let length: u64 = if head.parts_count.is_some() {
-		rusoto_retry(|| async {
-			s3_client
-				.head_object(rusoto_s3::HeadObjectRequest { bucket: bucket.clone(), key: key.clone(), part_number: None, ..Default::default() })
-				.await
-		})
-		.await
-		.unwrap()
-		.content_length
-		.unwrap()
-		.try_into()
-		.unwrap()
-	} else {
-		part_size
-	};
-
-	assert!(part_size * (parts.unwrap_or(1) - 1) < length && length <= part_size * parts.unwrap_or(1));
-
-	let pb = indicatif::ProgressBar::new(length);
-	pb.set_style(
-		indicatif::ProgressStyle::default_bar()
-			.template("{spinner:.green} [{elapsed_precise}] [{wide_bar:.cyan/blue}] {bytes}/{total_bytes} ({bytes_per_sec}, {eta})")
-			.progress_chars("#>-")
-			.on_finish(indicatif::ProgressFinish::AndLeave),
-	);
-
-	if let Some(parts) = parts {
-		let parallelism = 20;
-
-		let body = tokio_util::io::StreamReader::new(
-			futures::stream::iter((0..parts).map(move |i| {
-				let (pb, bucket, key) = (pb.clone(), bucket.clone(), key.clone());
-				async move {
-					let range = part_size * i..(part_size * (i + 1)).min(length);
-					let body = rusoto_retry(|| async {
-						s3_client
-							.get_object(rusoto_s3::GetObjectRequest {
-								bucket: bucket.clone(),
-								key: key.clone(),
-								part_number: Some((i + 1).try_into().unwrap()),
-								..Default::default()
-							})
-							.await
-					})
-					.await
-					.unwrap()
-					.body
-					.unwrap()
-					.into_async_read();
-					let mut body = pb.wrap_async_read(body);
-					let cap: usize = (range.end - range.start).try_into().unwrap();
-					let mut buf = BytesMut::with_capacity(cap);
-					while buf.len() != cap {
-						let _ = body.read_buf(&mut buf).await?;
-						assert!(buf.len() <= cap);
-					}
-					Ok::<_, io::Error>(buf)
-				}
-			}))
-			.buffered(parallelism),
-		);
-		Ok(tokio_util::either::Either::Left(body))
-	} else {
-		let body = rusoto_retry(|| async {
-			s3_client.get_object(GetObjectRequest { bucket: bucket.clone(), key: key.clone(), ..Default::default() }).await
-		})
-		.await
-		.unwrap()
-		.body
-		.unwrap()
-		.into_async_read();
-		let body = pb.wrap_async_read(body);
-		let body = tokio::io::BufReader::with_capacity(16 * 1024 * 1024, body);
-		Ok(tokio_util::either::Either::Right(body))
-	}
-}
-
-async fn rusoto_retry<F, U, T, E>(mut f: F) -> Result<T, RusotoError<E>>
-where
-	F: FnMut() -> U,
-	U: Future<Output = Result<T, RusotoError<E>>>,
-{
-	loop {
-		match f().await {
-			Err(RusotoError::HttpDispatch(e)) => println!("{:?}", e),
-			Err(RusotoError::Unknown(response))
-				if response.status.is_server_error()
-					|| (response.status == 403 && str::from_utf8(&response.body).unwrap().contains("RequestTimeTooSkewed")) => {}
-			res => break res,
-		}
-		tokio::time::sleep(Duration::from_secs(2)).await;
-	}
 }
 
 mod then_cancel {

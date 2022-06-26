@@ -1,8 +1,10 @@
-#[allow(dead_code)]
+#![allow(clippy::must_use_candidate, clippy::implicit_hasher)]
+
+mod aws;
 mod docker;
 
 use async_compression::{tokio::write::ZstdEncoder, Level};
-use futures::{future::Fuse, FutureExt, StreamExt};
+use futures::{future::Fuse, FutureExt};
 use pin_project::pin_project;
 use std::{
 	collections::{BTreeSet, HashSet}, convert::TryInto, fs, future::Future, io, path::{Path, PathBuf}, pin::Pin, task::{Context, Poll}
@@ -92,9 +94,10 @@ pub fn bundle(binary: PathBuf, resource_dirs: HashSet<PathBuf>) -> impl AsyncBuf
 			let docker_dir = Path::new("__docker");
 			let docker = Docker::new();
 			builder_append_dir(&mut tar_, &docker_dir).await.unwrap();
-			let docker_tar = docker.images_export(docker_images);
+			let docker_tar = docker.images_export(&docker_images);
 			tokio::pin!(docker_tar);
-			let mut entries = tokio_tar::Archive::new(docker_tar).entries().unwrap();
+			let mut entries = tokio_tar::Archive::new(docker_tar);
+			let mut entries = entries.entries().unwrap();
 			while let Some(entry) = entries.next().await {
 				let entry = entry.unwrap();
 				let mut header = entry.header().clone();
@@ -125,7 +128,7 @@ where
 	header.set_mode(0o755);
 	header.set_size(0);
 	header.set_entry_type(tokio_tar::EntryType::Directory);
-	self_.append_data(&mut header, path, &[] as &[u8]).await
+	self_.append_data(&mut header, path, [].as_slice()).await
 }
 
 #[pin_project]
@@ -157,6 +160,6 @@ where
 		self_.reader.poll_fill_buf(cx)
 	}
 	fn consume(self: Pin<&mut Self>, amt: usize) {
-		self.project().reader.consume(amt)
+		self.project().reader.consume(amt);
 	}
 }

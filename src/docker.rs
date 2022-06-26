@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use bytes::Bytes;
 use futures::{stream, StreamExt, TryStreamExt};
 use shiplift::{image::ImageBuildChunk, PullOptions};
@@ -36,7 +38,7 @@ impl Docker {
 	}
 
 	/// Export the images to a tar
-	pub fn images_export(&self, images: Vec<String>) -> impl AsyncRead + '_ {
+	pub fn images_export(&self, images: &[String]) -> impl AsyncRead + '_ {
 		let stream = self.docker.images().export(images.iter().map(|x| &**x).collect());
 		tokio_util::io::StreamReader::new(stream.map(|item| item.map(Bytes::from).map_err(|err| io::Error::new(io::ErrorKind::Other, err))))
 	}
