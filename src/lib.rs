@@ -3,11 +3,18 @@
 mod aws;
 mod docker;
 
-use async_compression::{tokio::write::ZstdEncoder, Level};
-use futures::{future::Fuse, FutureExt};
+use async_compression::{Level, tokio::write::ZstdEncoder};
+use futures::{FutureExt, future::Fuse};
 use pin_project::pin_project;
 use std::{
-	collections::{BTreeSet, HashSet}, convert::TryInto, fs, future::Future, io, path::{Path, PathBuf}, pin::Pin, task::{Context, Poll}
+	collections::{BTreeSet, HashSet},
+	convert::TryInto,
+	fs,
+	future::Future,
+	io,
+	path::{Path, PathBuf},
+	pin::Pin,
+	task::{Context, Poll},
 };
 use tokio::io::{AsyncBufRead, AsyncRead, AsyncWriteExt, ReadBuf};
 use walkdir::WalkDir;
@@ -47,7 +54,7 @@ pub fn bundle(binary: PathBuf, resource_dirs: HashSet<PathBuf>) -> impl AsyncBuf
 		tar_.mode(tokio_tar::HeaderMode::Deterministic);
 
 		// add the entry point to tar
-		let mut entry = shlex::join([binary.to_str().unwrap()]);
+		let mut entry = shlex::try_join([binary.to_str().unwrap()]).unwrap();
 		entry.push('\n');
 		let mut header = tokio_tar::Header::new_gnu();
 		header.set_mtime(0);

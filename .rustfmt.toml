@@ -1,11 +1,14 @@
-max_width = 150
-version = "Two"
-use_small_heuristics = "Max"
+comment_width = 120
+fn_params_layout = "Compressed"
 hard_tabs = true
-imports_layout = "Horizontal"
 imports_granularity = "Crate"
-fn_args_layout = "Compressed"
+imports_layout = "Mixed"
+max_width = 150
 use_field_init_shorthand = true
+use_small_heuristics = "Max"
+style_edition = "2024"
+wrap_comments = false
+merge_derives = false
 
 # To enable when stable
 # wrap_comments = true # https://github.com/rust-lang/rustfmt/issues/3347
