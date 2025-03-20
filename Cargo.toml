@@ -1,7 +1,7 @@
 [workspace]
 [package]
 name = "bndl"
-version = "0.1.4"
+version = "0.1.5"
 license = "MIT OR Apache-2.0"
 authors = ["Alec Mocatta <alec@mocatta.net>"]
 categories = ["development-tools"]
@@ -21,10 +21,11 @@ maintenance = { status = "actively-developed" }
 
 [dependencies]
 async-compression = { version = "0.4", features = ["tokio", "zstd"] }
+bollard = "0.18"
 derive-new = "0.5"
 envy = "0.4"
 futures = "0.3"
-indicatif = { version = "0.17.0-beta.4", features = ["tokio"] }
+indicatif = { version = "0.17", features = ["tokio"] }
 pin-project = "1"
 serde = "1"
 serde_with = "1"
@@ -35,22 +36,15 @@ tokio-tar = "0.3"
 walkdir = "2"
 
 # vendored aws deps
-base64 = "0.21"
+base64 = "0.22"
+bytes = "1"
 md-5 = "0.10"
 rusoto_core = { version = "0.48", default-features = false, features = ["rustls"] }
 rusoto_credential = "0.48"
 rusoto_s3 = { version = "0.48", default-features = false, features = ["rustls"] }
 
 # vendored docker deps
-bytes = "1"
 tokio-util = { version = "0.7", features = ["io", "io-util"] }
-
-[target.'cfg(unix)'.dependencies]
-shiplift = { version = "0.7", default-features = false, features = ["unix-socket"] }
-
-[target.'cfg(windows)'.dependencies]
-shiplift = { version = "0.7", default-features = false }
 
 [patch.crates-io]
 tokio-tar = { version = "0.3", git = "https://github.com/alecmocatta/tokio-tar" }
-shiplift = { version = "0.7", git = "https://github.com/alecmocatta/shiplift" }

@@ -55,7 +55,7 @@ async fn main() {
 				let args = shlex::split(&entrypoint).unwrap();
 				return (tree_hash, args);
 			}
-			fs::remove_dir_all(&tree_hash).or_else(|e| (e.kind() == io::ErrorKind::NotFound).then(|| ()).ok_or(e)).unwrap();
+			fs::remove_dir_all(&tree_hash).or_else(|e| (e.kind() == io::ErrorKind::NotFound).then_some(()).ok_or(e)).unwrap();
 			fs::create_dir(&tree_hash).unwrap();
 
 			// scope to ensure pb is dropped before potential panics https://github.com/mitsuhiko/indicatif/issues/121
@@ -120,10 +120,13 @@ async fn main() {
 
 mod then_cancel {
 	use derive_new::new;
-	use futures::{ready, stream::FusedStream, Stream};
+	use futures::{Stream, ready, stream::FusedStream};
 	use pin_project::pin_project;
 	use std::{
-		fmt, future::Future, pin::Pin, task::{Context, Poll}
+		fmt,
+		future::Future,
+		pin::Pin,
+		task::{Context, Poll},
 	};
 
 	#[pin_project]
@@ -192,10 +195,13 @@ mod then_cancel {
 
 mod for_each_cancel {
 	use derive_new::new;
-	use futures::{future::FusedFuture, ready, stream::FusedStream, Stream};
+	use futures::{Stream, future::FusedFuture, ready, stream::FusedStream};
 	use pin_project::pin_project;
 	use std::{
-		fmt, future::Future, pin::Pin, task::{Context, Poll}
+		fmt,
+		future::Future,
+		pin::Pin,
+		task::{Context, Poll},
 	};
 
 	#[pin_project]
@@ -258,10 +264,12 @@ mod for_each_cancel {
 
 mod dedup {
 	use derive_new::new;
-	use futures::{ready, Stream};
+	use futures::{Stream, ready};
 	use pin_project::pin_project;
 	use std::{
-		fmt, pin::Pin, task::{Context, Poll}
+		fmt,
+		pin::Pin,
+		task::{Context, Poll},
 	};
 
 	#[pin_project]

@@ -1,13 +1,14 @@
 #![allow(dead_code, clippy::must_use_candidate)]
 
-use base64::{engine::general_purpose::STANDARD as BASE64, Engine as _};
+use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64};
 use bytes::{Bytes, BytesMut};
-use futures::{stream, Stream, StreamExt, TryStreamExt};
+use futures::{Stream, StreamExt, TryStreamExt, stream};
 use md5::{Digest, Md5};
 use rusoto_core::{HttpClient, RusotoError};
 use rusoto_credential::StaticProvider;
 use rusoto_s3::{
-	CompleteMultipartUploadRequest, CompletedMultipartUpload, CompletedPart, CreateMultipartUploadRequest, GetObjectRequest, HeadObjectRequest, ListObjectsV2Error, ListObjectsV2Output, ListObjectsV2Request, Object, S3Client, UploadPartRequest, S3 as _
+	CompleteMultipartUploadRequest, CompletedMultipartUpload, CompletedPart, CreateMultipartUploadRequest, GetObjectRequest, HeadObjectRequest,
+	ListObjectsV2Error, ListObjectsV2Output, ListObjectsV2Request, Object, S3 as _, S3Client, UploadPartRequest,
 };
 use std::{error::Error, future::Future, io, str, time::Duration};
 use tokio::io::{AsyncBufRead, AsyncRead, AsyncReadExt};
@@ -115,7 +116,7 @@ pub async fn upload(
 						key: key.clone(),
 						upload_id: upload_id.clone(),
 						part_number: (i + 1).try_into().unwrap(),
-						content_md5: Some(BASE64.encode(&Md5::new().chain_update(&buf).finalize())),
+						content_md5: Some(BASE64.encode(Md5::new().chain_update(&buf).finalize())),
 						body: Some(rusoto_core::ByteStream::new_with_size(stream::once(async { Ok(buf) }), buf_len)),
 						..UploadPartRequest::default()
 					})

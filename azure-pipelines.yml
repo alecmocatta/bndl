@@ -14,7 +14,7 @@ jobs:
     endpoint: alecmocatta
     default:
       rust_toolchain: stable nightly
-      rust_lint_toolchain: nightly-2021-11-14
+      rust_lint_toolchain: nightly-2025-02-14
       rust_flags: ''
       rust_features_clippy: ''
       rust_features: ''
@@ -24,11 +24,11 @@ jobs:
     matrix:
       windows:
         imageName: 'windows-latest'
-        rust_target_run: 'x86_64-pc-windows-msvc i686-pc-windows-msvc' # x86_64-pc-windows-gnu
+        rust_target_run: 'x86_64-pc-windows-msvc' # i686-pc-windows-msvc x86_64-pc-windows-gnu
       mac:
         imageName: 'macos-latest'
         rust_target_build: '' # aarch64-apple-darwin
         rust_target_run: 'x86_64-apple-darwin'
       linux:
         imageName: 'ubuntu-latest'
-        rust_target_run: 'x86_64-unknown-linux-gnu x86_64-unknown-linux-musl' # i686-unknown-linux-gnu i686-unknown-linux-musl
+        rust_target_run: 'x86_64-unknown-linux-gnu' # x86_64-unknown-linux-musl i686-unknown-linux-gnu i686-unknown-linux-musl
