@@ -2,7 +2,7 @@
 
 use bollard::{errors::Error, image::ImportImageOptions, secret::BuildInfo};
 use futures::{StreamExt, TryStreamExt};
-use std::{future::Future, io};
+use std::{future::Future, io, time::Duration};
 use tokio::io::{AsyncRead, AsyncWrite};
 
 pub struct Docker {
@@ -10,7 +10,7 @@ pub struct Docker {
 }
 impl Docker {
 	pub fn new() -> Self {
-		Self { docker: bollard::Docker::connect_with_local_defaults().unwrap() }
+		Self { docker: bollard::Docker::connect_with_local_defaults().unwrap().with_timeout(Duration::MAX) }
 	}
 
 	/// Export the images to a tar
