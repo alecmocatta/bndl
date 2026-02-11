@@ -1,10 +1,12 @@
+#![feature(lazy_cell_into_inner)]
+
 mod aws;
 mod docker;
 
 use async_compression::tokio::bufread::ZstdDecoder;
-use futures::{Stream, StreamExt};
+use futures::{Stream, StreamExt, channel::oneshot};
 use serde::Deserialize;
-use std::{env, fs, future::Future, io, path::Path, str, time::Duration};
+use std::{cell::LazyCell, env, fs, future::Future, io, path::Path, str, time::Duration};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
 use aws::Region;
@@ -67,8 +69,12 @@ async fn main() {
 				let mut entries = tokio_tar::Archive::new(tar);
 				let mut entries = entries.entries().unwrap();
 				let docker = Docker::new();
-				let (writer, results) = docker.images_import();
-				let mut docker_tar = tokio_tar::Builder::new(writer);
+				let (docker_result_sender, docker_result_receiver) = oneshot::channel();
+				let mut docker_tar = LazyCell::new(|| {
+					let (writer, results) = docker.images_import();
+					docker_result_sender.send(results).ok().unwrap();
+					tokio_tar::Builder::new(writer)
+				});
 
 				let mut entrypoint = None;
 
@@ -89,14 +95,17 @@ async fn main() {
 								let _ = entry.unpack_in(&tree_hash).await.unwrap();
 							}
 						}
-						let mut docker_tar = docker_tar.into_inner().await.unwrap();
-						docker_tar.shutdown().await.unwrap();
+						if let Ok(docker_tar) = LazyCell::into_inner(docker_tar) {
+							docker_tar.into_inner().await.unwrap().shutdown().await.unwrap();
+						}
 					},
-					results
+					async { if let Ok(docker_result) = docker_result_receiver.await { Some(docker_result.await) } else { None } }
 				);
 				(docker_result, entrypoint)
 			};
-			docker_result.unwrap();
+			if let Some(docker_result) = docker_result {
+				docker_result.unwrap();
+			}
 			let args = shlex::split(entrypoint.as_ref().unwrap()).unwrap();
 			assert!(!args.is_empty());
 			fs::write(entry, entrypoint.unwrap()).unwrap();

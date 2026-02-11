@@ -16,7 +16,7 @@ impl Docker {
 	/// Export the images to a tar
 	pub fn images_export(&self, images: &[String]) -> impl AsyncRead + '_ {
 		let stream = self.docker.export_images(&images.iter().map(ToString::to_string).collect::<Vec<_>>().iter().map(|x| &**x).collect::<Vec<_>>());
-		tokio_util::io::StreamReader::new(stream.map(|item| item.map_err(|err| io::Error::new(io::ErrorKind::Other, err))))
+		tokio_util::io::StreamReader::new(stream.map(|item| item.map_err(io::Error::other)))
 	}
 
 	/// Import the images from a tar (optionally gzip, bzip2 or xz)
