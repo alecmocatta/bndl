@@ -6,17 +6,19 @@ mod docker;
 use async_compression::tokio::bufread::ZstdDecoder;
 use futures::{Stream, StreamExt, channel::oneshot};
 use serde::Deserialize;
+use serde_with::{DisplayFromStr, serde_as};
 use std::{cell::LazyCell, env, fs, future::Future, io, path::Path, str, time::Duration};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
 use aws::Region;
 use docker::Docker;
 
+#[serde_as]
 #[derive(Deserialize, Debug)]
 struct AwsConfig {
 	access_key_id: String,
 	secret_access_key: String,
-	#[serde(with = "serde_with::rust::display_fromstr")]
+	#[serde_as(as = "DisplayFromStr")]
 	region: Region,
 }
 
@@ -41,7 +43,8 @@ async fn main() {
 		.then(|_| async {
 			// check /branches/main on s3
 			let mut ret = String::new();
-			s3_client.download(config.bucket.clone(), format!("branches/{}", config.branch))
+			s3_client
+				.download(config.bucket.clone(), format!("branches/{}", config.branch))
 				.await
 				.expect("couldn't get branches/main")
 				.read_to_string(&mut ret)

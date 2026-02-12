@@ -1,6 +1,6 @@
 #![allow(dead_code)]
 
-use bollard::{errors::Error, image::ImportImageOptions, secret::BuildInfo};
+use bollard::{config::BuildInfo, errors::Error, query_parameters::ImportImageOptions};
 use futures::{StreamExt, TryStreamExt};
 use std::{future::Future, io, time::Duration};
 use tokio::io::{AsyncRead, AsyncWrite};
@@ -26,14 +26,14 @@ impl Docker {
 			writer,
 			self.docker
 				.import_image_stream(
-					ImportImageOptions { quiet: false },
-					tokio_util::io::ReaderStream::with_capacity(reader, 16 * 1024 * 1024).map(|x| x.unwrap()),
+					ImportImageOptions { quiet: false, platform: None },
+					tokio_util::io::ReaderStream::with_capacity(reader, 16 * 1024 * 1024),
 					None,
 				)
 				.map(|chunk| match chunk {
-					Ok(BuildInfo { id: _, stream: _, error, error_detail, status: _, progress: _, progress_detail: _, aux: _ }) => {
-						if error.is_some() || error_detail.is_some() {
-							Err(Error::DockerStreamError { error: format!("{error:?}: {error_detail:?}") })
+					Ok(BuildInfo { id: _, stream: _, error_detail, status: _, progress_detail: _, aux: _ }) => {
+						if let Some(error_detail) = error_detail {
+							Err(Error::DockerStreamError { error: format!("{error_detail:?}") })
 						} else {
 							Ok(())
 						}

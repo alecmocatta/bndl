@@ -21,14 +21,14 @@ maintenance = { status = "actively-developed" }
 
 [dependencies]
 async-compression = { version = "0.4", features = ["tokio", "zstd"] }
-bollard = "0.18"
-derive-new = "0.5"
+bollard = "0.20"
+derive-new = "0.7"
 envy = "0.4"
 futures = "0.3"
-indicatif = { version = "0.17", features = ["tokio"] }
+indicatif = { version = "0.18", features = ["tokio"] }
 pin-project = "1"
 serde = "1"
-serde_with = "1"
+serde_with = "3"
 shlex = "1"
 tokio = { version = "1", features = ["macros", "net", "fs", "process", "rt-multi-thread", "io-util"] }
 tokio-stream = "0.1"
