@@ -35,13 +35,13 @@ async fn main() {
 	let aws_config: AwsConfig = envy::prefixed("AWS_").from_env().unwrap();
 	let config: Config = envy::prefixed("BNDL_").from_env().unwrap();
 
-	let s3_client = &aws::s3_new(&aws_config.access_key_id, &aws_config.secret_access_key, aws_config.region);
+	let s3_client = &aws::Config::new(&aws_config.access_key_id, &aws_config.secret_access_key, aws_config.region).s3();
 
 	interval(Duration::from_secs(10))
 		.then(|_| async {
 			// check /branches/main on s3
 			let mut ret = String::new();
-			aws::download(s3_client, config.bucket.clone(), format!("branches/{}", config.branch))
+			s3_client.download(config.bucket.clone(), format!("branches/{}", config.branch))
 				.await
 				.expect("couldn't get branches/main")
 				.read_to_string(&mut ret)
@@ -62,7 +62,7 @@ async fn main() {
 
 			// scope to ensure pb is dropped before potential panics https://github.com/mitsuhiko/indicatif/issues/121
 			let (docker_result, entrypoint) = {
-				let tar = aws::download(s3_client, config.bucket.clone(), format!("{}/backend.tar.zst", tree_hash)).await.unwrap();
+				let tar = s3_client.download(config.bucket.clone(), format!("{}/backend.tar.zst", tree_hash)).await.unwrap();
 				let tar = ZstdDecoder::new(tar);
 				let tar = tokio::io::BufReader::with_capacity(16 * 1024 * 1024, tar);
 
